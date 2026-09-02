@@ -95,7 +95,9 @@ main { flex: 1 1 auto; display: flex; min-height: 0; }
   width: 132px; height: 84px;
   border: 1px solid var(--line); border-radius: 8px;
   box-shadow: var(--shadow); background: #fff;
+  overflow: hidden;   /* the inner svg draws past the rounded corners otherwise */
 }
+.react-flow__minimap.mini svg { border-radius: 7px; }
 .react-flow__controls { box-shadow: var(--shadow); border-radius: 8px; overflow: hidden; }
 .react-flow__controls-button { border-bottom: 1px solid var(--line); }
 
