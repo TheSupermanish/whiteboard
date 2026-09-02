@@ -96,7 +96,9 @@ Two modes. The difference between them is enforced, not advertised.
 
 In review mode `draw_plan` and `remove_element` are withdrawn from the host **and refused if called anyway**. A hidden-but-callable tool is not a boundary. There is a test for exactly this, because an earlier version of this codebase had a `|| TOOLS[name]` fallback in its dispatcher that made every mode restriction cosmetic.
 
-Deleting anything goes through `navigator.modelContext.requestUserInteraction()` first, and the prompt names what would be destroyed:
+Withdrawal is done by aborting the `AbortSignal` each tool was registered with, which is the only mechanism the spec provides. Verified over the real API: in review mode, `executeTool('draw_plan', …)` comes back `Tool not found: draw_plan`. The host never receives the implementation directly either. It gets a wrapper whose `execute` routes back through the dispatcher, so a host that ignores the signal and calls a withdrawn tool anyway is still refused by the mode check rather than running it.
+
+Deleting anything asks a person first, and the prompt names what would be destroyed:
 
 > Delete "Match the name phonetically"? 1 comment on it would go too.
 
@@ -119,7 +121,7 @@ Deleting a node somebody objected to destroys the record of the objection. That 
 ```bash
 npm install
 npm run dev        # http://localhost:1447
-npm test           # 154 assertions, no browser needed
+npm test           # 172 assertions, no browser needed
 npm run build      # static output in dist/
 ```
 
@@ -128,9 +130,13 @@ for ranking, Vite to build. Everything under `src/lib/` has no dependencies at a
 
 ### Trying it with an agent
 
+The API is `document.modelContext`. Chromium's origin-trial builds also expose
+`navigator.modelContext`, so both are checked and `hostKind()` reports which answered.
+
+- **Any browser.** If there is no WebMCP host, [`@mcp-b/global`](https://www.npmjs.com/package/@mcp-b/global) installs the polyfill and the same `document.modelContext` API appears, with a transport an MCP client can connect to. The badge says `(polyfill)` when that is what is running, because claiming a native host you do not have is the kind of thing this whole project is against. The polyfill is a dynamic import, so browsers that have their own host never download it.
 - **ChatGPT's in-app browser** supports WebMCP natively. Open the URL and say *"draw the plan for X on the board"*.
 - **Chrome 146+**: enable `chrome://flags/#enable-webmcp-testing`.
-- **No agent?** The page says so in the top right, and **Play example** runs the whole loop without one. Most people will see this page before they ever wire an agent up, so the loop had to be legible without one.
+- **No agent at all?** **Play example** runs the whole loop without one. Most people will see this page before they wire an agent up, so the loop had to be legible without one.
 
 ## Layout
 

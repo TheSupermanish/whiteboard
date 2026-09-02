@@ -81,8 +81,17 @@ Four things make the difference:
 
 ## How WebMCP was implemented
 
-`navigator.modelContext.registerTool()` for 13 tools, re-registered whenever the board mode
-changes; `requestUserInteraction()` gating every destructive write.
+`document.modelContext.registerTool()` for 13 tools, each registered with an `AbortSignal` that
+is aborted to withdraw it when the board mode changes. Every destructive write asks a person
+first. Where the browser has no WebMCP host, `@mcp-b/global` provides the polyfill and the page
+says so in the badge rather than implying a native one.
+
+Verified end to end over the real API, not just called internally: `getTools()` returns the 13
+tools with their annotations intact, `executeTool('check_plan', …)` returns the analysis, and in
+review mode `executeTool('draw_plan', …)` returns `Tool not found: draw_plan`.
+
+Every tool carries `untrustedContentHint`, because the labels and comments the board hands back
+are written by whoever is at the board. The four readers carry `readOnlyHint`.
 
 Notable choices:
 

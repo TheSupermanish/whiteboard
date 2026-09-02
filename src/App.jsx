@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Actions } from './actions.js';
+import { ensureHost } from './lib/host.js';
 import { ReactFlowProvider } from '@xyflow/react';
 
 import { createScene } from './lib/scene.js';
@@ -53,11 +54,17 @@ export default function App() {
   }, [toast]);
 
   // --- tool surface ------------------------------------------------------
+  // Registration waits for a host, otherwise the first setMode runs against
+  // nothing and the tools exist only inside this page.
+  const [host, setHost] = useState(null);
+  useEffect(() => { ensureHost().then(setHost); }, []);
+
   useEffect(() => {
+    if (!host) return;
     mcp.attach({ scene, notify: changed });
     mcp.setMode('draft');
     bump();
-  }, [scene, changed]);
+  }, [host, scene, changed]);
 
   useEffect(() => {
     window.redline = {
@@ -208,7 +215,7 @@ export default function App() {
     setTab('selection');
   }, []);
 
-  const agentPresent = typeof navigator.modelContext?.registerTool === 'function';
+  const agentPresent = host === 'native' || host === 'polyfill';
   const others = peers.filter(p => p.id !== me.id);
 
   return (
@@ -240,11 +247,16 @@ export default function App() {
           <span
             className={`agent-state${agentPresent ? ' live' : ''}`}
             title={agentPresent
-              ? 'This page has registered its tools with the agent in this browser.'
-              : "Open in ChatGPT's browser, or Chrome with WebMCP enabled, to let an agent drive the board."}
+              ? `${mcp.hostKind() || 'document.modelContext'} is answering`
+                + (host === 'polyfill'
+                  ? ', provided by the @mcp-b/global polyfill because this browser has no WebMCP host of its own.'
+                  : ', provided by the browser itself.')
+              : "No WebMCP host. Open in ChatGPT's browser, or Chrome with WebMCP enabled."}
           >
             <span className="dot" />
-            {agentPresent ? `${mcp.registeredToolNames().length} tools offered` : 'no agent connected'}
+            {agentPresent
+              ? `${mcp.registeredToolNames().length} tools on WebMCP${host === 'polyfill' ? ' (polyfill)' : ''}`
+              : 'no WebMCP host'}
           </span>
           <button className="ghost" disabled={replaying} onClick={() => setReplaying(true)}>
             {replaying ? 'Playing…' : 'Play example'}
