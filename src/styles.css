@@ -332,6 +332,10 @@ textarea.say:focus { outline: 2px solid #c9d8fb; outline-offset: -1px; border-co
 .card-tools button:hover { background: #eef1f5; color: var(--ink); }
 .card-tools button.tick:hover { background: #e6f6ec; color: #1a7f45; }
 .card-tools button.cross:hover { background: #fdecec; color: #b4232a; }
+/* The verdict already given, so the row reads as a state and not just as
+   three things you could do. */
+.card-tools button.tick.on { background: #1a7f45; color: #fff; }
+.card-tools button.cross.on { background: #b4232a; color: #fff; }
 
 .card-compose {
   /* Above the card, not over it: the step being argued with has to stay

@@ -77,15 +77,26 @@ function CardTools({ element }) {
     );
   }
 
+  // All three stay put whatever the verdict is. Hiding the one you just
+  // pressed removes the only confirmation that it worked, and leaves no way
+  // to change your mind. The current verdict is shown as pressed instead, and
+  // pressing it again takes the step back to undecided.
+  const agreed = element.status === 'agreed';
+  const dropped = element.status === 'rejected';
+
   return (
     <div className="card-tools nodrag nopan" onClick={ev => ev.stopPropagation()}>
-      {element.status !== 'agreed' && (
-        <button className="tick" title="This is right" onClick={() => act.setStatus(element.id, 'agreed')}>✓</button>
-      )}
+      <button
+        className={`tick${agreed ? ' on' : ''}`}
+        title={agreed ? 'Agreed. Press again to take that back' : 'This is right'}
+        onClick={() => act.setStatus(element.id, agreed ? 'proposed' : 'agreed')}
+      >✓</button>
       <button title="Comment on this step" onClick={() => setWriting('comment')}>💬</button>
-      {element.status !== 'rejected' && (
-        <button className="cross" title="This is wrong" onClick={() => setWriting('disagree')}>✕</button>
-      )}
+      <button
+        className={`cross${dropped ? ' on' : ''}`}
+        title={dropped ? 'Dropped. Press again to put it back' : 'This is wrong'}
+        onClick={() => (dropped ? act.setStatus(element.id, 'proposed') : setWriting('disagree'))}
+      >✕</button>
     </div>
   );
 }
