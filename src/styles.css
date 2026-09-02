@@ -116,9 +116,13 @@ main { flex: 1 1 auto; display: flex; min-height: 0; }
 .empty .or { font-size: 13px; color: var(--faint); }
 
 .step { position: relative; width: 216px; }
+/* Edge and fill are variables so that a state can recolour the card without
+   knowing whether that card's outline is a border or a clipped layer. */
 .step-shape {
+  --edge: #b8c2ce;
+  --fill: #fff;
   position: absolute; inset: 0;
-  background: #fff; border: 1.5px solid #b8c2ce; border-radius: 10px;
+  background: var(--fill); border: 1.5px solid var(--edge); border-radius: 10px;
   box-shadow: var(--shadow);
   transition: border-color .12s, box-shadow .12s;
 }
@@ -133,35 +137,54 @@ main { flex: 1 1 auto; display: flex; min-height: 0; }
 .step[data-kind="terminal"][data-tall] .step-shape { border-radius: 22px; }
 .step[data-kind="entry"][data-tall] .step-body,
 .step[data-kind="terminal"][data-tall] .step-body { padding-left: 13px; padding-right: 13px; }
-.step[data-kind="entry"] .step-shape { border-color: var(--green); }
-.step[data-kind="terminal"] .step-shape { border-color: var(--ink); }
+.step[data-kind="entry"] .step-shape { --edge: var(--green); }
+.step[data-kind="terminal"] .step-shape { --edge: var(--ink); }
 .step[data-kind="entry"] .step-body,
 .step[data-kind="terminal"] .step-body { padding-left: 18px; padding-right: 18px; }
 
-.step[data-kind="decision"] .step-shape {
-  border-color: var(--amber);
-  border-radius: 4px;
-  clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%);
+/* A clipped element cannot carry a border: clip-path removes the border too,
+   wherever the shape crosses an edge, which left the parallelogram and the
+   branch with their slanted sides simply missing. So the outline is drawn as
+   the shape itself, filled with the edge colour, and the fill sits on top of
+   it inset by the width the border would have had. Both layers are clipped by
+   the same polygon, and the percentages in it resolve against each layer's own
+   box, so the inset one comes out very slightly narrower: exactly the effect
+   an even border has. */
+.step[data-kind="decision"] .step-shape,
+.step[data-kind="io"] .step-shape {
   border: 0;
-  background: linear-gradient(#fff,#fff) padding-box, var(--amber) border-box;
-  outline: 1.5px solid var(--amber); outline-offset: -1px;
+  background: var(--edge);
+  box-shadow: none;              /* a clipped box-shadow is invisible anyway */
+}
+.step[data-kind="decision"] .step-shape::after,
+.step[data-kind="io"] .step-shape::after {
+  content: ''; position: absolute; inset: 1.5px;
+  background: var(--fill);
+}
+
+.step[data-kind="decision"] .step-shape { --edge: var(--amber); border-radius: 4px; }
+.step[data-kind="decision"] .step-shape,
+.step[data-kind="decision"] .step-shape::after {
+  clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%);
 }
 .step[data-kind="decision"] .step-body { padding-left: 22px; padding-right: 22px; }
 
-.step[data-kind="io"] .step-shape {
-  border-color: var(--accent);
+.step[data-kind="io"] .step-shape { --edge: var(--accent); }
+.step[data-kind="io"] .step-shape,
+.step[data-kind="io"] .step-shape::after {
   clip-path: polygon(11px 0, 100% 0, calc(100% - 11px) 100%, 0 100%);
 }
 .step[data-kind="io"] .step-body { padding-left: 16px; }
-.step[data-kind="store"] .step-shape { border-color: var(--purple); border-radius: 10px / 22px; }
+
+.step[data-kind="store"] .step-shape { --edge: var(--purple); border-radius: 10px / 22px; }
 .step[data-kind="external"] .step-shape { border-style: dashed; }
-.step[data-kind="option"] .step-shape { border-color: #ccd4de; background: #fafbfc; }
+.step[data-kind="option"] .step-shape { --edge: #ccd4de; --fill: #fafbfc; }
 
 .step[data-low="1"] .step-shape { border-style: dashed; }
-.step[data-status="rejected"] .step-shape { border-color: var(--red); background: #fdf7f7; }
-.step[data-stale="1"] .step-shape { border-color: var(--amber); background: #fffcf6; }
+.step[data-status="rejected"] .step-shape { --edge: var(--red); --fill: #fdf7f7; }
+.step[data-stale="1"] .step-shape { --edge: var(--amber); --fill: #fffcf6; }
 .step:hover .step-shape { box-shadow: var(--lift); }
-.step[data-selected="1"] .step-shape { border-color: var(--accent); border-width: 2px; box-shadow: var(--lift); }
+.step[data-selected="1"] .step-shape { --edge: var(--accent); border-width: 2px; box-shadow: var(--lift); }
 
 .step-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
 .step-kind {
