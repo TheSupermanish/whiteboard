@@ -710,11 +710,21 @@ export function register(tool) {
     try {
       const result = mc.registerTool(hostFacing(tool),
         controller ? { signal: controller.signal } : undefined);
-      // A rejection here is the host refusing the tool, and a tool the host
-      // does not have must not sit in the registry as though it does.
       if (result && typeof result.catch === 'function') {
         result.catch(err => {
-          console.warn(`host refused ${tool.name}:`, err?.message || err);
+          const why = err?.message || String(err);
+          // Cleanup after an abort is not synchronous, so re-registering a
+          // name straight after withdrawing it can land while the host still
+          // holds the old one. The tool is registered, just not by this call:
+          // adopt it. Dropping it here is what made a tool that came back
+          // from review mode unavailable for the rest of the session.
+          if (/already registered/i.test(why)) {
+            console.warn(`${tool.name} was still registered; adopting it`);
+            return;
+          }
+          // Anything else is the host refusing, and a tool the host does not
+          // have must not sit in the registry as though it does.
+          console.warn(`host refused ${tool.name}:`, why);
           registered.delete(tool.name);
         });
       }

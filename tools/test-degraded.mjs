@@ -60,6 +60,33 @@ console.log('\nwithdrawing a tool from a host that cannot drop it');
   ok('nothing was destroyed by the stale call', scene.has(id));
 }
 
+console.log('\na host that is slow to let go of a name');
+{
+  // Registering the same name twice is what happens on the way back from
+  // review mode, because abort cleanup is not synchronous.
+  const clashes = { tools: new Map(), seen: new Set() };
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, writable: true, value: {
+    modelContext: {
+      registerTool(tool) {
+        if (clashes.seen.has(tool.name)) {
+          return Promise.reject(new Error(`Tool already registered: ${tool.name}`));
+        }
+        clashes.seen.add(tool.name);
+        clashes.tools.set(tool.name, tool);
+        return Promise.resolve();
+      },
+    },
+  }});
+
+  mcp.setMode('review');
+  mcp.setMode('draft');
+  await new Promise(r => setTimeout(r, 0));       // let the rejections land
+  ok('a tool the host already holds stays available',
+    mcp.registeredToolNames().includes('remove_element'),
+    mcp.registeredToolNames().sort().join(','));
+  ok('the whole surface came back', mcp.registeredToolNames().length === 13);
+}
+
 console.log('\nthe page answering the gate instead');
 {
   let asked = null;
