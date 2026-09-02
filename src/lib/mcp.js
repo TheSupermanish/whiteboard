@@ -764,5 +764,21 @@ export async function callTool(name, args = {}) {
   }
   const tool = TOOLS[name];
   if (!tool) throw new Error(`"${name}" is registered but has no implementation`);
+  rejectUnknownArgs(tool, args);
   return tool.execute(args);
+}
+
+/**
+ * An argument the tool does not read is a change that silently did not happen.
+ * A near miss on a key name is the likely cause, so the error names both what
+ * was sent and what was expected rather than leaving the agent to believe the
+ * success it just got back.
+ */
+function rejectUnknownArgs(tool, args) {
+  const known = Object.keys(tool.inputSchema?.properties || {});
+  if (!known.length || !args || typeof args !== 'object') return;
+  const strays = Object.keys(args).filter(k => !known.includes(k));
+  if (!strays.length) return;
+  throw new Error(
+    `"${tool.name}" does not take ${strays.join(', ')}. it takes: ${known.sort().join(', ')}`);
 }

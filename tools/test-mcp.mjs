@@ -243,6 +243,21 @@ console.log('\noptions the agent considered and ruled out');
   ok('decide_option reports the resulting stale set', Array.isArray(d.stale));
 }
 
+console.log('\nunknown arguments');
+{
+  await throwsAsync('a misspelled argument is refused, not ignored',
+    () => mcp.callTool('revise', { retitle: [{ id: 'n1', label: 'nope' }] }),
+    'does not take retitle');
+  await throwsAsync('the refusal says what the tool does take',
+    () => mcp.callTool('revise', { retitle: [] }), 'relabel');
+  const target = scene.toJSON().elements.find(e => e.type === 'node');
+  await mcp.callTool('revise', {
+    relabel: [{ id: target.id, label: 'Renamed by the agent' }],
+  });
+  ok('the key the tool does take still relabels',
+    scene.get(target.id).label === 'Renamed by the agent');
+}
+
 console.log('\nunknown tools');
 {
   await throwsAsync('an unregistered name is refused',
