@@ -1,0 +1,11 @@
+name = "redline-relay"
+main = "worker/index.js"
+compatibility_date = "2026-05-01"
+
+[[durable_objects.bindings]]
+name = "BOARD"
+class_name = "Board"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["Board"]
