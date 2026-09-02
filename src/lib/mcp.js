@@ -140,6 +140,7 @@ export const TOOLS = {
 
   draw_plan: {
     name: 'draw_plan',
+    annotations: { untrustedContentHint: true },
     description:
       'Draw a whole plan on the board in one call. Give each node a short key of your own '
       + 'choosing and refer to those keys in edges and notes. Do not send coordinates: the board '
@@ -247,6 +248,7 @@ export const TOOLS = {
 
   add_step: {
     name: 'add_step',
+    annotations: { untrustedContentHint: true },
     description: 'Add one node to the board, optionally wired to nodes that already exist.',
     inputSchema: {
       type: 'object',
@@ -276,6 +278,7 @@ export const TOOLS = {
 
   connect: {
     name: 'connect',
+    annotations: { untrustedContentHint: true },
     description:
       'Join two nodes. kind "flow" means control or data moves along it. kind "derives" means '
       + 'the target only exists because of the source, which is how the board works out what a '
@@ -302,6 +305,7 @@ export const TOOLS = {
 
   add_note: {
     name: 'add_note',
+    annotations: { untrustedContentHint: true },
     description:
       'Stick a note on a node. Use kind "assumption" for anything you are taking on faith: it '
       + 'shows up as unsettled until the human confirms or denies it, and if they deny it the '
@@ -329,6 +333,7 @@ export const TOOLS = {
 
   propose_options: {
     name: 'propose_options',
+    annotations: { untrustedContentHint: true },
     description:
       'Show a choice you are weighing, with the candidates you considered. Draws a decision node '
       + 'with one option hanging off it per candidate. This is the point of the board: the human '
@@ -375,6 +380,7 @@ export const TOOLS = {
 
   decide_option: {
     name: 'decide_option',
+    annotations: { untrustedContentHint: true },
     description:
       'Settle a choice: mark one option agreed and the rest rejected, each with a reason. '
       + 'Rejected options stay visible on the board, struck through, so the human can argue with '
@@ -413,6 +419,7 @@ export const TOOLS = {
 
   explain_node: {
     name: 'explain_node',
+    annotations: { readOnlyHint: true, untrustedContentHint: true },
     description:
       'Attach the detail a coder needs to one node, and say how sure you are. Low confidence is '
       + 'drawn dashed, which tells the reviewer where to look first. Understating uncertainty '
@@ -437,6 +444,7 @@ export const TOOLS = {
 
   get_board: {
     name: 'get_board',
+    annotations: { readOnlyHint: true, untrustedContentHint: true },
     description:
       'Read the board: every node, edge, note and comment, with ids. Call this before revising '
       + 'anything, because the human may have moved, rejected or commented on things since you '
@@ -447,6 +455,7 @@ export const TOOLS = {
 
   check_plan: {
     name: 'check_plan',
+    annotations: { readOnlyHint: true, untrustedContentHint: true },
     description:
       'Run the board\'s structural checks: unreachable nodes, dead ends, decisions with only one '
       + 'branch, loops, circular justification, every route through the plan, unsettled '
@@ -479,6 +488,7 @@ export const TOOLS = {
 
   list_open_items: {
     name: 'list_open_items',
+    annotations: { readOnlyHint: true, untrustedContentHint: true },
     description:
       'The queue: objections the human made that you have not answered, assumptions nobody has '
       + 'ruled on, nodes they rejected, and anything the checks call an error. Work this list '
@@ -516,6 +526,7 @@ export const TOOLS = {
 
   reply_to_comment: {
     name: 'reply_to_comment',
+    annotations: { untrustedContentHint: true },
     description:
       'Answer an objection in the thread where it was made. Answer it, do not resolve it: '
       + 'whether the objection is dealt with is the human\'s call, not yours.',
@@ -534,6 +545,7 @@ export const TOOLS = {
 
   revise: {
     name: 'revise',
+    annotations: { untrustedContentHint: true },
     description:
       'Change the board in response to review, in one call: relabel nodes, reject them with a '
       + 'reason, add edges, or remove edges. Node ids stay the same, so the comments made on them '
@@ -608,6 +620,7 @@ export const TOOLS = {
 
   remove_element: {
     name: 'remove_element',
+    annotations: { untrustedContentHint: true },
     description:
       'Delete a node and everything that only existed because of it. Needs the human at the board '
       + 'to confirm, and reports exactly what went with it, because deleting something a person '
@@ -669,20 +682,46 @@ export const MODES = {
 
 // --- registration ---------------------------------------------------------
 
+/**
+ * The spec puts this on `document`. Chromium's Origin Trial builds also carry
+ * `navigator.modelContext`, and the polyfill installs on `document`, so both
+ * are checked rather than betting on one.
+ * @see https://webmachinelearning.github.io/webmcp/#modelcontext
+ */
 function modelContext() {
-  return globalThis.navigator?.modelContext || null;
+  return globalThis.document?.modelContext || globalThis.navigator?.modelContext || null;
+}
+
+/** Which surface answered, for the badge in the header. */
+export function hostKind() {
+  if (globalThis.document?.modelContext) return 'document.modelContext';
+  if (globalThis.navigator?.modelContext) return 'navigator.modelContext';
+  return null;
 }
 
 export function register(tool) {
   if (registered.has(tool.name)) return registered.get(tool.name);
   const mc = modelContext();
-  let handle = true;
+  // registerTool resolves to undefined, so there is no handle to keep. Removal
+  // is done by aborting the signal the tool was registered with, which is the
+  // only withdrawal mechanism the spec has.
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
   if (mc?.registerTool) {
-    try { handle = mc.registerTool(tool) ?? true; }
-    catch (err) { console.warn(`could not register ${tool.name}:`, err.message); }
+    try {
+      const result = mc.registerTool(hostFacing(tool),
+        controller ? { signal: controller.signal } : undefined);
+      // A rejection here is the host refusing the tool, and a tool the host
+      // does not have must not sit in the registry as though it does.
+      if (result && typeof result.catch === 'function') {
+        result.catch(err => {
+          console.warn(`host refused ${tool.name}:`, err?.message || err);
+          registered.delete(tool.name);
+        });
+      }
+    } catch (err) { console.warn(`could not register ${tool.name}:`, err.message); }
   }
-  registered.set(tool.name, handle);
-  return handle;
+  registered.set(tool.name, controller);
+  return controller;
 }
 
 /**
@@ -699,34 +738,40 @@ export function register(tool) {
  * way to interpret.
  */
 export function unregister(name) {
-  const handle = registered.get(name);
-  if (handle === undefined) return false;
+  if (!registered.has(name)) return false;
+  const controller = registered.get(name);
   const mc = modelContext();
   let removed = false;
   try {
-    if (handle && typeof handle.unregister === 'function') { handle.unregister(); removed = true; }
+    if (controller && typeof controller.abort === 'function') { controller.abort(); removed = true; }
     else if (typeof mc?.unregisterTool === 'function') { mc.unregisterTool(name); removed = true; }
   } catch (err) { console.warn(`could not unregister ${name}:`, err.message); }
 
   registered.delete(name);
-  if (!removed && mc?.registerTool) shadow(name);
+  // No second registration is needed to enforce this. Whether or not the host
+  // honoured the signal, the tool it holds is the wrapper from hostFacing, and
+  // that refuses on its own.
+  if (!removed) {
+    console.warn(`${name} was withdrawn; the host may still list it, `
+      + 'in which case calling it will be refused.');
+  }
   return true;
 }
 
-/** Leaves a same-named tool in place that refuses and says why. */
-function shadow(name) {
-  const original = TOOLS[name];
-  if (!original) return;
-  const reason = `"${name}" is not available while the board is in ${currentModeLabel()}. `
-    + `Available now: ${registeredToolNames().sort().join(', ')}.`;
-  try {
-    modelContext().registerTool({
-      name,
-      description: `UNAVAILABLE IN THIS MODE. ${reason} ${original.description}`,
-      inputSchema: original.inputSchema,
-      execute: async () => { throw new Error(reason); },
-    });
-  } catch (err) { console.warn(`could not shadow ${name}:`, err.message); }
+/**
+ * What the host actually gets. The execute it receives goes through callTool
+ * rather than straight to the implementation, so a host that keeps a tool
+ * after its signal aborted still meets the mode check and the argument check.
+ * Withdrawal then does not depend on the host honouring anything.
+ */
+function hostFacing(tool) {
+  return {
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+    ...(tool.annotations ? { annotations: tool.annotations } : {}),
+    execute: input => callTool(tool.name, input || {}),
+  };
 }
 
 const currentModeLabel = () => MODES[currentMode]?.label || currentMode;
@@ -740,9 +785,9 @@ export function setMode(mode) {
   for (const name of wanted) {
     if (!TOOLS[name]) throw new Error(`mode "${mode}" lists a tool that does not exist: ${name}`);
   }
-  // The mode changes first so that a withdrawal explains itself in terms of the
-  // mode being entered, and the surviving tools are registered before the
-  // withdrawn ones are shadowed so the refusal can list what is available.
+  // The mode changes first so that a refusal explains itself in terms of the
+  // mode being entered, and the surviving tools register before the withdrawn
+  // ones leave, so the refusal can list what is available instead.
   const leaving = registeredToolNames().filter(name => !wanted.has(name));
   currentMode = mode;
   for (const name of wanted) register(TOOLS[name]);

@@ -33,6 +33,9 @@ export function StepNode({ data, selected }) {
     : findings.some(f => f.severity === 'warn') ? 'warn' : null;
   const low = element.confidence != null && element.confidence < 0.5;
 
+  // A pill is only a pill while the card is short. Once notes are stacked
+  // inside one, the radius becomes an ellipse that cuts the corners off its
+  // own contents, so data-tall lets the shape square itself off.
   return (
     <div
       className="step"
@@ -42,6 +45,7 @@ export function StepNode({ data, selected }) {
       data-low={low ? 1 : 0}
       data-selected={selected ? 1 : 0}
       data-flag={worst || ''}
+      data-tall={notes.length > 0 ? '' : undefined}
     >
       <Handle type="target" position={Position.Left} />
       <div className="step-shape" aria-hidden="true" />

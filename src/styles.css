@@ -148,6 +148,13 @@ main { flex: 1 1 auto; display: flex; min-height: 0; }
 
 .step[data-kind="entry"] .step-shape,
 .step[data-kind="terminal"] .step-shape { border-radius: 999px; }
+/* Notes inside make the card tall, and a 999px radius on a tall card is an
+   ellipse that cuts the corners off its own contents. Square it off and let
+   the border colour carry the distinction instead. */
+.step[data-kind="entry"][data-tall] .step-shape,
+.step[data-kind="terminal"][data-tall] .step-shape { border-radius: 22px; }
+.step[data-kind="entry"][data-tall] .step-body,
+.step[data-kind="terminal"][data-tall] .step-body { padding-left: 13px; padding-right: 13px; }
 .step[data-kind="entry"] .step-shape { border-color: var(--green); }
 .step[data-kind="terminal"] .step-shape { border-color: var(--ink); }
 .step[data-kind="entry"] .step-body,

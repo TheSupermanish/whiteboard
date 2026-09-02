@@ -20,11 +20,13 @@ const host = { tools: new Map(), prompts: [], answer: true };
 // redefined rather than assigned.
 Object.defineProperty(globalThis, 'navigator', { configurable: true, writable: true, value: {
   modelContext: {
-    registerTool(tool) {
+    // A conforming host drops the tool when the signal it was given aborts,
+    // and resolves to undefined rather than handing back a handle.
+    registerTool(tool, options) {
       host.tools.set(tool.name, tool);
-      return { unregister: () => host.tools.delete(tool.name) };
+      options?.signal?.addEventListener('abort', () => host.tools.delete(tool.name));
+      return Promise.resolve();
     },
-    unregisterTool(name) { return host.tools.delete(name); },
     async requestUserInteraction({ message }) {
       host.prompts.push(message);
       return host.answer;
@@ -241,6 +243,22 @@ console.log('\noptions the agent considered and ruled out');
   ok('each rejection keeps its reason',
     scene.get(r.options[2].id).rejected_because.includes('whole database'));
   ok('decide_option reports the resulting stale set', Array.isArray(d.stale));
+}
+
+console.log('\nannotations');
+{
+  const names = Object.keys(mcp.TOOLS);
+  ok('every tool declares annotations',
+    names.every(n => !!mcp.TOOLS[n].annotations));
+  ok('everything is marked as carrying untrusted content',
+    names.every(n => mcp.TOOLS[n].annotations.untrustedContentHint === true),
+    'the human writes the labels and the comments, and those come back to the agent');
+  const readOnly = names.filter(n => mcp.TOOLS[n].annotations.readOnlyHint);
+  ok('only the readers claim to be read-only',
+    readOnly.sort().join(',') === 'check_plan,explain_node,get_board,list_open_items',
+    readOnly.join(','));
+  ok('the annotations reach the host',
+    host.tools.get('get_board')?.annotations?.readOnlyHint === true);
 }
 
 console.log('\nunknown arguments');

@@ -1,7 +1,8 @@
-// Chrome 152 ships navigator.modelContext.registerTool and nothing else: no
-// requestUserInteraction, no unregisterTool. Both the confirmation gate and
-// the mode boundary have to hold on a host like that, so this runs in its own
-// file, where mcp.js has not already registered anything against a richer stub.
+// A host that implements the bare minimum: registerTool, on navigator rather
+// than document, ignoring the AbortSignal it is handed and offering no way to
+// ask a person anything. Both the confirmation gate and the mode boundary have
+// to hold there. It runs in its own file, where mcp.js has not already
+// registered anything against a more capable stub.
 
 import { createScene } from '../src/lib/scene.js';
 import * as mcp from '../src/lib/mcp.js';
@@ -19,7 +20,7 @@ async function throwsAsync(label, fn, match) {
 const bare = { tools: new Map() };
 Object.defineProperty(globalThis, 'navigator', { configurable: true, writable: true, value: {
   modelContext: {
-    // Real Chrome hands back a promise, which has no unregister method on it.
+    // Resolves like the spec says, then does nothing when the signal aborts.
     registerTool(tool) { bare.tools.set(tool.name, tool); return Promise.resolve(); },
   },
 }});
@@ -48,13 +49,15 @@ console.log('\nwithdrawing a tool from a host that cannot drop it');
   await throwsAsync('the dispatcher refuses it',
     () => mcp.callTool('remove_element', { id }), 'is not available');
 
-  const shadowed = bare.tools.get('remove_element');
-  ok('a same-named tool is left behind to explain itself',
-    !!shadowed && /UNAVAILABLE IN THIS MODE/.test(shadowed.description || ''));
-  ok('the explanation lists what can be called instead',
-    (shadowed?.description || '').includes('check_plan'));
+  // This host ignores the abort signal, so it still lists the tool. What it
+  // holds is the wrapper, which routes back through the dispatcher.
+  const stale = bare.tools.get('remove_element');
+  ok('the host is still holding the withdrawn tool', !!stale);
   await throwsAsync('and it refuses when the host calls it anyway',
-    () => shadowed.execute({ id }), 'not available');
+    () => stale.execute({ id }), 'is not available');
+  await throwsAsync('the refusal names the mode the board is in',
+    () => stale.execute({ id }), 'review');
+  ok('nothing was destroyed by the stale call', scene.has(id));
 }
 
 console.log('\nthe page answering the gate instead');
