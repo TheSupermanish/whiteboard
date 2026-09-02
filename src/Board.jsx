@@ -39,12 +39,20 @@ export default function Board({ graph, revision, selected, onSelect, onBackgroun
   const moved = useRef(new Map());
   const pending = useRef(false);
   const lastRevision = useRef(-1);
+  // Framing moves the viewport, so it is only right when the person has not
+  // chosen where to look yet. Doing it on every edit yanks the board back to
+  // the top the moment somebody agrees a step.
+  const wantsFrame = useRef(true);
 
   // Rebuild from the scene, keeping any position already worked out so the
   // board does not flash back to the origin on every edit.
   useEffect(() => {
     setNodes(prev => {
       const known = new Map(prev.map(n => [n.id, n]));
+      // New steps arriving is the one edit worth moving the view for: it is the
+      // agent drawing something the person has not seen. Changing a step that
+      // is already there is not.
+      if (prev.length && graph.nodes.some(n => !known.has(n.id))) wantsFrame.current = true;
       return graph.nodes.map(n => {
         const before = known.get(n.id);
         return {
@@ -99,6 +107,8 @@ export default function Board({ graph, revision, selected, onSelect, onBackgroun
     const laid = layoutGraph(nodes, edges).map(n =>
       moved.current.has(n.id) ? { ...n, position: moved.current.get(n.id) } : n);
     setNodes(laid);
+    if (!wantsFrame.current) return;
+    wantsFrame.current = false;
     requestAnimationFrame(() => frame(laid));      // let the positions land first
   }, [initialized, nodes, edges, setNodes, frame]);
 
@@ -114,6 +124,7 @@ export default function Board({ graph, revision, selected, onSelect, onBackgroun
   const relayout = useCallback(() => {
     moved.current.clear();
     pending.current = true;
+    wantsFrame.current = true;      // asked for out loud, so moving the view is wanted
     setNodes(prev => [...prev]);
   }, [setNodes]);
 

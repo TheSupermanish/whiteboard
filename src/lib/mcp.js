@@ -17,12 +17,14 @@ import { analyze } from './analyze.js';
 
 let scene = null;
 let onChange = () => {};
+let askPage = null;               // page-supplied confirmation, used when the host has none
 let currentMode = 'draft';
 const registered = new Map();     // name -> unregister handle or true
 
-export function attach({ scene: s, notify }) {
+export function attach({ scene: s, notify, confirm: pageConfirm }) {
   scene = s;
   onChange = notify || (() => {});
+  if (pageConfirm) askPage = pageConfirm;
 }
 
 // --- helpers --------------------------------------------------------------
@@ -94,17 +96,42 @@ function resolver(keyMap) {
   };
 }
 
+/**
+ * Asks the person at the board before doing something destructive.
+ *
+ * `navigator.modelContext.requestUserInteraction()` is the right way to do
+ * this, and it is not in Chrome 152: the API ships `registerTool`, `getTools`
+ * and `executeTool` and nothing else. An earlier version of this function
+ * returned `true` when the method was missing, which meant the gate silently
+ * evaporated on the only browser you can currently run this in. So there are
+ * three fallbacks and the last one is a refusal. Never "no gate available,
+ * carry on" for an irreversible action.
+ */
 async function confirm(message) {
   const mc = globalThis.navigator?.modelContext;
-  if (typeof mc?.requestUserInteraction !== 'function') return true;   // no gate available
-  const answer = await mc.requestUserInteraction({ message });
-  // Treat anything other than an explicit refusal as consent, but a refusal is
-  // final: this gate exists so an agent cannot quietly delete work a human
-  // commented on.
-  if (answer === false || answer?.granted === false || answer?.accepted === false) {
+
+  if (typeof mc?.requestUserInteraction === 'function') {
+    const answer = await mc.requestUserInteraction({ message });
+    // Anything other than an explicit refusal counts as consent, but a refusal
+    // is final.
+    if (answer === false || answer?.granted === false || answer?.accepted === false) {
+      throw new Error('the person at the board declined this change');
+    }
+    return true;
+  }
+
+  if (askPage) {
+    if (await askPage(message)) return true;
     throw new Error('the person at the board declined this change');
   }
-  return true;
+
+  if (typeof globalThis.confirm === 'function') {
+    if (globalThis.confirm(message)) return true;
+    throw new Error('the person at the board declined this change');
+  }
+
+  throw new Error(
+    'this change needs a person to confirm it, and there is no way to ask in this environment');
 }
 
 // --- tools ----------------------------------------------------------------
@@ -658,17 +685,51 @@ export function register(tool) {
   return handle;
 }
 
+/**
+ * Withdraws a tool for the current mode.
+ *
+ * There is no removal method in Chrome 152, and the promise `registerTool`
+ * returns is not a handle either, so "unregister" often cannot mean "take it
+ * off the host's list". When it cannot, the tool is replaced in place by one
+ * that carries the same name and refuses, explaining which mode withdrew it.
+ *
+ * That is better than leaving the original registered and relying on the
+ * in-page check alone: an agent reading the host's tool list would otherwise
+ * see a working `draw_plan` during review, call it, and get an error it has no
+ * way to interpret.
+ */
 export function unregister(name) {
   const handle = registered.get(name);
   if (handle === undefined) return false;
   const mc = modelContext();
+  let removed = false;
   try {
-    if (handle && typeof handle.unregister === 'function') handle.unregister();
-    else if (typeof mc?.unregisterTool === 'function') mc.unregisterTool(name);
+    if (handle && typeof handle.unregister === 'function') { handle.unregister(); removed = true; }
+    else if (typeof mc?.unregisterTool === 'function') { mc.unregisterTool(name); removed = true; }
   } catch (err) { console.warn(`could not unregister ${name}:`, err.message); }
+
   registered.delete(name);
+  if (!removed && mc?.registerTool) shadow(name);
   return true;
 }
+
+/** Leaves a same-named tool in place that refuses and says why. */
+function shadow(name) {
+  const original = TOOLS[name];
+  if (!original) return;
+  const reason = `"${name}" is not available while the board is in ${currentModeLabel()}. `
+    + `Available now: ${registeredToolNames().sort().join(', ')}.`;
+  try {
+    modelContext().registerTool({
+      name,
+      description: `UNAVAILABLE IN THIS MODE. ${reason} ${original.description}`,
+      inputSchema: original.inputSchema,
+      execute: async () => { throw new Error(reason); },
+    });
+  } catch (err) { console.warn(`could not shadow ${name}:`, err.message); }
+}
+
+const currentModeLabel = () => MODES[currentMode]?.label || currentMode;
 
 export const registeredToolNames = () => [...registered.keys()];
 export const getMode = () => currentMode;
@@ -676,12 +737,16 @@ export const getMode = () => currentMode;
 export function setMode(mode) {
   if (!MODES[mode]) throw new Error(`unknown mode: ${mode}`);
   const wanted = new Set(MODES[mode].tools);
-  for (const name of registeredToolNames()) if (!wanted.has(name)) unregister(name);
   for (const name of wanted) {
     if (!TOOLS[name]) throw new Error(`mode "${mode}" lists a tool that does not exist: ${name}`);
-    register(TOOLS[name]);
   }
+  // The mode changes first so that a withdrawal explains itself in terms of the
+  // mode being entered, and the surviving tools are registered before the
+  // withdrawn ones are shadowed so the refusal can list what is available.
+  const leaving = registeredToolNames().filter(name => !wanted.has(name));
   currentMode = mode;
+  for (const name of wanted) register(TOOLS[name]);
+  for (const name of leaving) unregister(name);
   return { mode, tools: registeredToolNames().sort() };
 }
 

@@ -10,7 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "serve": "vite",
-    "test": "node tools/test-analyze.mjs && node tools/test-mcp.mjs && node tools/test-recorded.mjs"
+    "test": "node tools/test-analyze.mjs && node tools/test-mcp.mjs && node tools/test-recorded.mjs && node tools/test-degraded.mjs"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.1",
