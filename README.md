@@ -2,7 +2,9 @@
 
 **A board where an agent draws its plan as a flowchart, and you review it node by node before any code exists.**
 
-Built for the WebMCP Challenge. Licence: MIT
+Built for the WebMCP Challenge.
+
+**Live: https://thesupermanish.github.io/whiteboard/** · **Code: https://github.com/TheSupermanish/whiteboard** · Licence: MIT
 
 ---
 
