@@ -86,3 +86,25 @@ function tether(g, nodes) {
   }
   return added;
 }
+
+/** How much of the viewport the plan covers, given a pan and zoom. 0 to 1. */
+export function visibleFraction(bounds, viewport, size) {
+  const { x, y, zoom } = viewport;
+  if (!bounds.width || !bounds.height || !size.width || !size.height) return 1;
+  const left = bounds.x * zoom + x;
+  const top = bounds.y * zoom + y;
+  const across = Math.max(0, Math.min(left + bounds.width * zoom, size.width) - Math.max(left, 0));
+  const down = Math.max(0, Math.min(top + bounds.height * zoom, size.height) - Math.max(top, 0));
+  return (across * down) / (size.width * size.height);
+}
+
+/**
+ * Whether the board should take the view back. Resizing the canvas, by
+ * collapsing the contents or by resizing the window, leaves a viewport chosen
+ * for a different size, and the plan can end up entirely outside it. An empty
+ * dotted background reads as a broken page rather than as a board somebody
+ * panned away from. The threshold is deliberately low: a deliberate pan that
+ * still shows part of the plan is left alone.
+ */
+export const LOST = 0.06;
+export const isLost = (bounds, viewport, size) => visibleFraction(bounds, viewport, size) < LOST;

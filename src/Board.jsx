@@ -14,7 +14,7 @@ import {
 } from '@xyflow/react';
 
 import { nodeTypes } from './nodes.jsx';
-import { ESTIMATED, layoutGraph } from './layout.js';
+import { ESTIMATED, isLost, layoutGraph } from './layout.js';
 
 const MINIMAP_COLOUR = {
   rejected: '#e6bcbc',
@@ -140,6 +140,23 @@ export default function Board({ graph, revision, selected, focus, onSelect, onBa
     }
     onNodesChange(changes);
   }, [onNodesChange]);
+
+  // Collapsing the contents, or resizing the window, changes the size of the
+  // canvas under a viewport that was chosen for the old one. The plan can end
+  // up entirely outside it, and an empty dotted background looks like a broken
+  // page rather than a board you have panned away from. Re-frame only when
+  // almost nothing is left on screen, so a deliberate pan is not overridden.
+  useEffect(() => {
+    const el = shell.current;
+    if (!el || typeof ResizeObserver !== 'function') return undefined;
+    const observer = new ResizeObserver(() => {
+      if (!nodes.length) return;
+      const size = { width: el.clientWidth, height: el.clientHeight };
+      if (isLost(getNodesBounds(nodes), getViewport(), size)) frame(nodes);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [nodes, frame, getViewport, getNodesBounds]);
 
   // Clicking a line in the contents should take you to that step without
   // changing the zoom, because the zoom is the reader's decision.

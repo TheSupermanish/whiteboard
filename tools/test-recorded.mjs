@@ -4,7 +4,7 @@
 import { createScene } from '../src/lib/scene.js';
 import { analyze } from '../src/lib/analyze.js';
 import { toFlow } from '../src/toFlow.js';
-import { layoutGraph, ESTIMATED } from '../src/layout.js';
+import { LOST, layoutGraph, isLost, visibleFraction, ESTIMATED } from '../src/layout.js';
 import * as mcp from '../src/lib/mcp.js';
 import { runRecorded } from '../src/lib/replay.js';
 
@@ -158,6 +158,29 @@ console.log('\nhostile labels');
     nodes[0].data.element.label === '<script>alert(1)</script> & "quotes"');
   ok('nothing in the graph is an html string',
     JSON.stringify(nodes).indexOf('&lt;') === -1);
+}
+
+console.log('\nknowing when the plan has left the screen');
+{
+  const size = { width: 900, height: 700 };
+  const bounds = { x: 0, y: 0, width: 1800, height: 1200 };
+
+  ok('a plan filling the canvas is not lost',
+    !isLost(bounds, { x: 0, y: 0, zoom: 0.5 }, size));
+  ok('a plan panned far off is lost',
+    isLost(bounds, { x: -9000, y: -6000, zoom: 0.75 }, size));
+  ok('a plan just off the left edge is lost',
+    isLost(bounds, { x: -1800 * 0.75 + 4, y: 0, zoom: 0.75 }, size));
+  ok('a plan half on screen is left alone',
+    !isLost(bounds, { x: -400, y: -200, zoom: 0.5 }, size));
+  ok('the fraction is a fraction',
+    visibleFraction(bounds, { x: 0, y: 0, zoom: 0.5 }, size) <= 1
+    && visibleFraction(bounds, { x: 0, y: 0, zoom: 0.5 }, size) > 0);
+  ok('a plan with no size is never lost, so an empty board is never chased',
+    !isLost({ x: 0, y: 0, width: 0, height: 0 }, { x: 0, y: 0, zoom: 1 }, size));
+  ok('a canvas with no size is never lost either, so a hidden tab is left alone',
+    !isLost(bounds, { x: -9000, y: 0, zoom: 1 }, { width: 0, height: 0 }));
+  ok('the threshold is small enough to be a last resort', LOST > 0 && LOST < 0.2);
 }
 
 console.log(`\n${pass}/${pass + fail} assertions passed`);
