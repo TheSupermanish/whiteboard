@@ -8,7 +8,10 @@
 // was considered and dropped is the most useful part of a reviewed plan.
 // ---------------------------------------------------------------------------
 
+import { useEffect, useRef, useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
+
+import { useActions } from './actions.js';
 
 const CAPTION = {
   entry: 'ENTRY', process: 'STEP', decision: 'BRANCH', store: 'STATE',
@@ -23,6 +26,68 @@ function flagFor(element, stale) {
   }
   if (element.status === 'agreed') return { cls: 'agreed', text: 'AGREED' };
   return null;
+}
+
+/**
+ * The controls that appear on a card when the pointer is over it. Agreeing is
+ * one click, because agreeing carries no information the agent needs. Both
+ * other verdicts open the same box, because "this is wrong" is only useful to
+ * the agent when it says why, and the objection is worth keeping either way.
+ */
+function CardTools({ element }) {
+  const act = useActions();
+  const [writing, setWriting] = useState(null);      // null | 'comment' | 'disagree'
+  const box = useRef(null);
+
+  useEffect(() => { if (writing) box.current?.focus(); }, [writing]);
+  if (!act) return null;
+
+  const send = () => {
+    const body = box.current?.value.trim();
+    if (!body) return;
+    if (writing === 'disagree') act.disagree(element.id, body);
+    else act.comment(element.id, body);
+    setWriting(null);
+  };
+
+  const keys = ev => {
+    if (ev.key === 'Escape') { ev.stopPropagation(); setWriting(null); }
+    if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) send();
+  };
+
+  if (writing) {
+    return (
+      <div className="card-compose nodrag nopan nowheel" onClick={ev => ev.stopPropagation()}>
+        <textarea
+          ref={box}
+          rows={3}
+          onKeyDown={keys}
+          placeholder={writing === 'disagree'
+            ? 'Why is this wrong? Everything downstream goes stale.'
+            : 'What is wrong with this step?'}
+        />
+        <div className="card-compose-row">
+          <button className={writing === 'disagree' ? 'danger' : 'primary'} onClick={send}>
+            {writing === 'disagree' ? 'Say why and drop it' : 'Comment'}
+          </button>
+          <button onClick={() => setWriting(null)}>Cancel</button>
+          <span className="hint">⌘+enter</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card-tools nodrag nopan" onClick={ev => ev.stopPropagation()}>
+      {element.status !== 'agreed' && (
+        <button className="tick" title="This is right" onClick={() => act.setStatus(element.id, 'agreed')}>✓</button>
+      )}
+      <button title="Comment on this step" onClick={() => setWriting('comment')}>💬</button>
+      {element.status !== 'rejected' && (
+        <button className="cross" title="This is wrong" onClick={() => setWriting('disagree')}>✕</button>
+      )}
+    </div>
+  );
 }
 
 export function StepNode({ data, selected }) {
@@ -81,6 +146,7 @@ export function StepNode({ data, selected }) {
           {comments.length}
         </span>
       )}
+      <CardTools element={element} />
       <Handle type="source" position={Position.Right} />
     </div>
   );

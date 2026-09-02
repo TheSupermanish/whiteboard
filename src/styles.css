@@ -348,3 +348,47 @@ textarea.say:focus { outline: 2px solid #c9d8fb; outline-offset: -1px; border-co
   .bar { flex-wrap: wrap; height: auto; padding: 8px 12px; gap: 10px; }
   .modes, .bar-right { margin-left: 0; }
 }
+
+/* --- controls on the cards themselves ----------------------------------- */
+/* Reviewing means touching a lot of steps, and a round trip to the side panel
+   for each one is the whole cost. Agreeing is one click here; disagreeing
+   still costs a sentence, because a rejection the agent cannot read is
+   nothing more than a red box. */
+.card-tools {
+  /* Left, because the comment count already owns the right corner. */
+  position: absolute; top: -13px; left: 10px;
+  display: none; gap: 3px; padding: 3px;
+  background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: var(--shadow); z-index: 6;
+}
+.step:hover .card-tools,
+.step[data-selected="1"] .card-tools { display: flex; }
+.card-tools button {
+  width: 24px; height: 22px; padding: 0; line-height: 1;
+  border: 0; border-radius: 5px; background: transparent;
+  font-size: 12px; color: var(--muted); cursor: pointer;
+}
+.card-tools button:hover { background: #eef1f5; color: var(--ink); }
+.card-tools button.tick:hover { background: #e6f6ec; color: #1a7f45; }
+.card-tools button.cross:hover { background: #fdecec; color: #b4232a; }
+
+.card-compose {
+  position: absolute; top: -6px; left: 8px; right: 8px;
+  padding: 7px; background: #fff;
+  border: 1px solid var(--line); border-radius: 9px;
+  box-shadow: var(--shadow); z-index: 7;
+}
+.card-compose textarea {
+  width: 100%; resize: none; border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 7px;
+  font: inherit; font-size: 12px; color: var(--ink);
+}
+.card-compose textarea:focus { outline: 2px solid #cddcf5; outline-offset: -1px; }
+.card-compose-row { display: flex; align-items: center; gap: 5px; margin-top: 6px; }
+.card-compose-row button {
+  padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px;
+  background: #fff; font-size: 12px; color: var(--ink); cursor: pointer;
+}
+.card-compose-row button.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+.card-compose-row button.danger { background: #b4232a; border-color: #b4232a; color: #fff; }
+.card-compose-row .hint { margin-left: auto; font-size: 11px; color: var(--faint); }

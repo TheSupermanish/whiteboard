@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { Actions } from './actions.js';
 import { ReactFlowProvider } from '@xyflow/react';
 
 import { createScene } from './lib/scene.js';
@@ -143,6 +144,12 @@ export default function App() {
 
   // --- what a human can do ------------------------------------------------
   const act = useMemo(() => ({
+    /** Says why it is wrong and drops it, in one gesture. */
+    disagree(id, because) {
+      if (!because.trim()) return;
+      scene.addComment({ anchor: id, body: because, author: YOU });
+      this.setStatus(id, 'rejected', because);
+    },
     comment(anchor, body) {
       scene.addComment({ anchor, body, author: YOU });
       say(mode === 'review'
@@ -158,9 +165,11 @@ export default function App() {
       scene.resolveComment(id, { author: YOU });
       changed();
     },
-    setStatus(id, status) {
-      let because = '';
-      if (status === 'rejected') {
+    setStatus(id, status, reason) {
+      let because = reason || '';
+      // A rejection with no reason is just a red box, so the reason is
+      // required. The cards ask for it inline; the panel falls back to prompt.
+      if (status === 'rejected' && !because.trim()) {
         because = prompt(
           'Why is this wrong? The agent reads this, and everything downstream is marked stale.') || '';
         if (!because.trim()) return;
@@ -256,6 +265,7 @@ export default function App() {
       <main>
         <section className="stage">
           <ReactFlowProvider>
+            <Actions.Provider value={act}>
             <Board
               graph={dimmed}
               revision={revision}
@@ -263,6 +273,7 @@ export default function App() {
               onSelect={select}
               onBackground={() => { setSelected(null); setHighlighted([]); }}
             />
+            </Actions.Provider>
           </ReactFlowProvider>
 
           {!hasPlan && (
