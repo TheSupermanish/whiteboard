@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import Contents from './Contents.jsx';
 import { Actions } from './actions.js';
 import { ensureHost } from './lib/host.js';
 import { ReactFlowProvider } from '@xyflow/react';
@@ -19,7 +20,7 @@ import { share, whoAmI } from './lib/net.js';
 import { runRecorded, stepCount } from './lib/replay.js';
 import { toFlow } from './toFlow.js';
 import Board from './Board.jsx';
-import Panel, { YOU } from './Panel.jsx';
+import { YOU } from './bits.jsx';
 
 const LS_KEY = 'redline:board:v3';
 
@@ -29,8 +30,11 @@ export default function App() {
   const scene = sceneRef.current;
 
   const [revision, bump] = useReducer(n => n + 1, 0);
+  const [tocOpen, setTocOpen] = useState(true);
+  // A token rather than an id: clicking the same line twice should still take
+  // you back to it, and selecting on the canvas must not pan the canvas.
+  const [focus, setFocus] = useState({ id: null, n: 0 });
   const [selected, setSelected] = useState(null);
-  const [tab, setTab] = useState('queue');
   const [mode, setMode] = useState('draft');
   const [highlighted, setHighlighted] = useState([]);
   const [toast, setToast] = useState(null);
@@ -117,7 +121,7 @@ export default function App() {
       onStep: ({ step, focus }) => {
         if (cancelled) return;
         if (step.say) say(step.say);
-        if (focus) { setSelected(focus); setTab('selection'); }
+        if (focus) setSelected(focus);
         changed();
       },
       pause: ms => new Promise(done => setTimeout(done, cancelled ? 0 : ms)),
@@ -212,7 +216,6 @@ export default function App() {
   const select = useCallback(id => {
     setSelected(id);
     setHighlighted([]);
-    setTab('selection');
   }, []);
 
   const agentPresent = host === 'native' || host === 'polyfill';
@@ -282,6 +285,7 @@ export default function App() {
               graph={dimmed}
               revision={revision}
               selected={selected}
+              focus={focus}
               onSelect={select}
               onBackground={() => { setSelected(null); setHighlighted([]); }}
             />
@@ -305,30 +309,16 @@ export default function App() {
             </div>
           )}
 
-          {hasPlan && (
-            <div className="legend">
-              <span><i className="sw entry" />entry</span>
-              <span><i className="sw decision" />branch</span>
-              <span><i className="sw io" />outside world</span>
-              <span><i className="sw store" />state</span>
-              <span><i className="sw rejected" />dropped</span>
-              <span><i className="sw stale" />stale</span>
-              <span><i className="sw low" />low confidence</span>
-              <span className="legend-hint">drag to pan · scroll to zoom · L to re-lay out</span>
-            </div>
-          )}
         </section>
 
-        <Panel
+        <Contents
           scene={scene}
           report={report}
           selected={selected}
-          tab={tab}
-          onTab={setTab}
-          onSelect={select}
-          onHighlight={ids => setHighlighted(prev =>
-            prev.join(',') === ids.join(',') ? [] : ids)}
+          onSelect={id => { select(id); setFocus({ id, n: focus.n + 1 }); }}
           act={act}
+          open={tocOpen}
+          onToggle={() => setTocOpen(o => !o)}
         />
       </main>
 

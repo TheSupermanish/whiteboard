@@ -7,14 +7,14 @@
 // reserves the space it really needs.
 // ---------------------------------------------------------------------------
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow, Background, BackgroundVariant, Controls, MiniMap,
   useNodesState, useEdgesState, useReactFlow, useNodesInitialized,
 } from '@xyflow/react';
 
 import { nodeTypes } from './nodes.jsx';
-import { layoutGraph } from './layout.js';
+import { ESTIMATED, layoutGraph } from './layout.js';
 
 const MINIMAP_COLOUR = {
   rejected: '#e6bcbc',
@@ -27,12 +27,12 @@ const FLOOR = 0.75;      // below this, labels stop being readable
 const CEILING = 1;
 const FRAME_PAD = 28;
 
-export default function Board({ graph, revision, selected, onSelect, onBackground }) {
+export default function Board({ graph, revision, selected, focus, onSelect, onBackground }) {
   const shell = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges] = useEdgesState([]);
   const initialized = useNodesInitialized();
-  const { setViewport, getNodesBounds } = useReactFlow();
+  const { setViewport, getNodesBounds, getViewport } = useReactFlow();
 
   // Positions the person dragged themselves. Re-running the layout must not
   // shove a node back after somebody deliberately moved it.
@@ -101,16 +101,36 @@ export default function Board({ graph, revision, selected, onSelect, onBackgroun
     );
   }, [setViewport, getNodesBounds]);
 
+  // React Flow measures nodes on an animation frame, so a tab that is not
+  // painting never reports them as initialized. An agent can draw a whole plan
+  // into a background tab, and finding it piled at the origin when you look is
+  // not acceptable. After a moment, lay out with estimated sizes instead and
+  // leave pending set, so the measured pass still happens once frames resume.
+  const [impatient, setImpatient] = useState(false);
   useEffect(() => {
-    if (!initialized || !pending.current || !nodes.length) return;
-    pending.current = false;
+    if (initialized) { setImpatient(false); return undefined; }
+    const timer = setTimeout(() => setImpatient(true), 400);
+    return () => clearTimeout(timer);
+  }, [initialized, revision]);
+
+  // Set to the revision an estimated pass has already run for. Without it, the
+  // pass sets nodes, which re-runs this effect, which lays out again: the guard
+  // is what keeps "lay out anyway" from becoming an infinite loop.
+  const rough = useRef(-1);
+  useEffect(() => {
+    if (!pending.current || !nodes.length) return;
+    if (initialized) pending.current = false;   // the measured pass, and the last one
+    else if (impatient && rough.current !== revision) rough.current = revision;
+    else return;
+
     const laid = layoutGraph(nodes, edges).map(n =>
       moved.current.has(n.id) ? { ...n, position: moved.current.get(n.id) } : n);
     setNodes(laid);
     if (!wantsFrame.current) return;
-    wantsFrame.current = false;
-    requestAnimationFrame(() => frame(laid));      // let the positions land first
-  }, [initialized, nodes, edges, setNodes, frame]);
+    if (initialized) wantsFrame.current = false;
+    // A timeout rather than an animation frame, for the same reason.
+    setTimeout(() => frame(laid), 32);
+  }, [initialized, impatient, revision, nodes, edges, setNodes, frame]);
 
   const handleNodesChange = useCallback(changes => {
     for (const change of changes) {
@@ -120,6 +140,25 @@ export default function Board({ graph, revision, selected, onSelect, onBackgroun
     }
     onNodesChange(changes);
   }, [onNodesChange]);
+
+  // Clicking a line in the contents should take you to that step without
+  // changing the zoom, because the zoom is the reader's decision.
+  const lastFocus = useRef(0);
+  useEffect(() => {
+    if (!focus?.id || focus.n === lastFocus.current) return;
+    lastFocus.current = focus.n;
+    const node = nodes.find(n => n.id === focus.id);
+    const el = shell.current;
+    if (!node || !el) return;
+    const { zoom } = getViewport();
+    const w = node.measured?.width || ESTIMATED.width;
+    const h = node.measured?.height || ESTIMATED.height;
+    setViewport({
+      x: el.clientWidth / 2 - (node.position.x + w / 2) * zoom,
+      y: (el.clientHeight - 30) / 2 - (node.position.y + h / 2) * zoom,
+      zoom,
+    }, { duration: 320 });
+  }, [focus, nodes, setViewport, getViewport]);
 
   const relayout = useCallback(() => {
     moved.current.clear();
