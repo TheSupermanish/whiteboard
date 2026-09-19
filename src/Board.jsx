@@ -117,6 +117,13 @@ export default function Board({ graph, revision, selected, focus, onSelect, onBa
   // pass sets nodes, which re-runs this effect, which lays out again: the guard
   // is what keeps "lay out anyway" from becoming an infinite loop.
   const rough = useRef(-1);
+  // The most recent layout, and the one pending frame timer. draw_plan lands as
+  // a run of revisions, so several passes queue up in quick succession: a timer
+  // that captured its own layout can fire last while holding an older one, and
+  // the board ends up framed for a plan that has already moved. One timer, and
+  // it reads whatever the latest layout is when it fires.
+  const latest = useRef([]);
+  const frameTimer = useRef(0);
   useEffect(() => {
     if (!pending.current || !nodes.length) return;
     if (initialized) pending.current = false;   // the measured pass, and the last one
@@ -126,10 +133,12 @@ export default function Board({ graph, revision, selected, focus, onSelect, onBa
     const laid = layoutGraph(nodes, edges).map(n =>
       moved.current.has(n.id) ? { ...n, position: moved.current.get(n.id) } : n);
     setNodes(laid);
+    latest.current = laid;
     if (!wantsFrame.current) return;
     if (initialized) wantsFrame.current = false;
     // A timeout rather than an animation frame, for the same reason.
-    setTimeout(() => frame(laid), 32);
+    clearTimeout(frameTimer.current);
+    frameTimer.current = setTimeout(() => frame(latest.current), 32);
   }, [initialized, impatient, revision, nodes, edges, setNodes, frame]);
 
   const handleNodesChange = useCallback(changes => {
@@ -212,9 +221,17 @@ export default function Board({ graph, revision, selected, focus, onSelect, onBa
     >
       <Background variant={BackgroundVariant.Dots} gap={22} size={1.1} color="#dde3ea" />
       <Controls showInteractive={false} position="bottom-right" />
-      <MiniMap
+      {/* An empty minimap is a blank white rectangle floating over an empty
+          board: it maps nothing and reads as a rendering fault. */}
+      {nodes.length > 0 && <MiniMap
         pannable
         zoomable
+        /* React Flow's svg is 200x150 unless told otherwise, and the styled box
+           around it is smaller with overflow hidden, so the map was being
+           cropped rather than scaled. These must stay equal to the size in
+           .react-flow__minimap.mini. */
+        width={132}
+        height={84}
         position="top-right"
         className="mini"
         maskColor="rgba(240,243,247,.62)"
@@ -227,7 +244,7 @@ export default function Board({ graph, revision, selected, focus, onSelect, onBa
           if (el?.status === 'agreed') return MINIMAP_COLOUR.agreed;
           return MINIMAP_COLOUR.plain;
         }}
-      />
+      />}
     </ReactFlow>
     </div>
   );
